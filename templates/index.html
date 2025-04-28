@@ -50,57 +50,512 @@
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const TYPING_TIMER_LENGTH = 800;
-        const TYPING_DISPLAY_TIMER_LENGTH = 2500;
-        const HASH_COLOR_COUNT = 18;
-        const AVATAR_COLORS = ["#ff7f0e","#1f77b4","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf","#aec7e8","#ffbb78","#98df8a","#ff9896","#c5b0d5","#c49c94","#f7b6d2","#c7c7c7"];
+        // --- Configuration & Constants ---
+        const TYPING_TIMER_LENGTH = 800; // ms
+        const TYPING_DISPLAY_TIMER_LENGTH = 2500; // ms how long typing indicator shows
+        const HASH_COLOR_COUNT = 18; // Number of distinct background colors for avatars
+        const AVATAR_COLORS = [ // Predefined colors for avatars
+            "#ff7f0e", "#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
+            "#e377c2", "#7f7f7f", "#bcbd22", "#17becf", "#aec7e8", "#ffbb78",
+            "#98df8a", "#ff9896", "#c5b0d5", "#c49c94", "#f7b6d2", "#c7c7c7"
+        ];
 
-        const messagesContainer=document.getElementById('messages'); const messageInputForm=document.getElementById('input-area'); const messageInput=document.getElementById('input'); const sendButton=document.getElementById('send-button'); const userList=document.getElementById('users'); const userListHeader=document.getElementById('user-list-header'); const typingIndicator=document.getElementById('typing-indicator'); const usernameModal=document.getElementById('username-modal'); const usernameInput=document.getElementById('username-input'); const usernameButton=document.getElementById('username-button'); const usernameError=document.getElementById('username-error'); const roomInput=document.getElementById('room-input'); const joinRoomButton=document.getElementById('join-room-button'); const currentRoomNameSpan=document.getElementById('current-room-name'); const emojiButton=document.getElementById('emoji-button'); const emojiPicker=document.querySelector('emoji-picker'); const soundToggle=document.getElementById('sound-toggle'); const notificationSound=document.getElementById('notification-sound');
+        // --- DOM Elements ---
+        const messagesContainer = document.getElementById('messages');
+        const messageInputForm = document.getElementById('input-area');
+        const messageInput = document.getElementById('input');
+        const sendButton = document.getElementById('send-button');
+        const userList = document.getElementById('users');
+        const userListHeader = document.getElementById('user-list-header');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const usernameModal = document.getElementById('username-modal');
+        const usernameInput = document.getElementById('username-input');
+        const usernameButton = document.getElementById('username-button');
+        const usernameError = document.getElementById('username-error');
+        const roomInput = document.getElementById('room-input');
+        const joinRoomButton = document.getElementById('join-room-button');
+        const currentRoomNameSpan = document.getElementById('current-room-name');
+        const emojiButton = document.getElementById('emoji-button');
+        const emojiPicker = document.querySelector('emoji-picker');
+        const soundToggle = document.getElementById('sound-toggle');
+        const notificationSound = document.getElementById('notification-sound');
 
-        let currentUsername=null; let currentRoom=null; let isTyping=false; let lastTypingTime; let usersTyping={}; let soundEnabled=false; let isWindowFocused=true;
 
-        const socket=io({reconnectionAttempts:5,reconnectionDelay:2e3,timeout:1e4});
+        // --- State Variables ---
+        let currentUsername = null;
+        let currentRoom = null;
+        let isTyping = false;
+        let lastTypingTime;
+        let usersTyping = {}; // { username: { username: string, timeoutId: number } }
+        let soundEnabled = false; // Sound off by default
+        let isWindowFocused = true;
 
-        function getUserInitials(username){if(!username)return"?";const parts=username.split(/[ _-]/);return parts.length===1?username.substring(0,2).toUpperCase():(parts[0][0]+(parts[1]?parts[1][0]:"")).toUpperCase()}
-        function getAvatarColor(username){let hash=0;if(!username)return AVATAR_COLORS[0];for(let i=0;i<username.length;i++){hash=username.charCodeAt(i)+((hash<<5)-hash);hash=hash&hash}return AVATAR_COLORS[Math.abs(hash)%AVATAR_COLORS.length]}
-        function createUserAvatar(username){const avatar=document.createElement('div');avatar.className="user-avatar";avatar.style.backgroundColor=getAvatarColor(username);avatar.textContent=getUserInitials(username);avatar.title=username;return avatar}
-        function escapeHTML(str){if(typeof str!=="string")return"";const div=document.createElement('div');div.appendChild(document.createTextNode(str));return div.innerHTML}
-        function formatMessageContent(text){const urlRegex=/(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;return text.replace(urlRegex,url=>`<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--link-color);">${url}</a>`)}
-        function scrollToBottom(){messagesContainer.scrollTop=messagesContainer.scrollHeight}
-        function playNotificationSound(){if(notificationSound.readyState>=2){notificationSound.currentTime=0;notificationSound.play().catch(error=>console.warn("Sound play failed:",error))}}
-        function updateSoundToggleUI(){soundToggle.className=soundEnabled?'sound-on':'sound-off';soundToggle.textContent=soundEnabled?'Sound ON':'Sound OFF';soundToggle.title=soundEnabled?'Click to Mute':'Click to Unmute'}
-        function enableChatInterface(){messageInput.disabled=false;sendButton.disabled=false;emojiButton.disabled=false;if(!currentRoom){roomInput.disabled=false;joinRoomButton.disabled=false;roomInput.focus()}else{messageInput.focus()}}
-        function disableChatInterface(){messageInput.disabled=true;sendButton.disabled=true;emojiButton.disabled=true;roomInput.disabled=true;joinRoomButton.disabled=true;emojiPicker.style.display='none'}
 
-        function addMessage(data,isHistory=false){const{msg,username,timestamp,type='user',room}=data;if(room&&room!==currentRoom)return;const messageElement=document.createElement('li');messageElement.classList.add(`message-${type}`);if(type==='user'){const messageContainer=document.createElement('div');messageContainer.classList.add('message-container');const isMyMsg=username===currentUsername;messageContainer.classList.add(isMyMsg?'my-message':'other-message');const avatarElement=createUserAvatar(username);const messageContent=document.createElement('div');messageContent.classList.add('message-content');const metaSpan=document.createElement('span');metaSpan.classList.add('message-meta');metaSpan.textContent=`${username} - ${timestamp||''}`;const bubbleSpan=document.createElement('span');bubbleSpan.classList.add('message-bubble');bubbleSpan.innerHTML=formatMessageContent(escapeHTML(msg));messageContent.appendChild(metaSpan);messageContent.appendChild(bubbleSpan);messageContainer.appendChild(avatarElement);messageContainer.appendChild(messageContent);messageElement.appendChild(messageContainer);if(!isHistory&&!isMyMsg&&soundEnabled&&!isWindowFocused){playNotificationSound()}}else{messageElement.innerHTML=`<span class="message-text">${escapeHTML(msg)}</span> <span class="message-timestamp">${timestamp||''}</span>`}messagesContainer.appendChild(messageElement);const shouldScroll=isHistory||(username===currentUsername)||(messagesContainer.scrollTop+messagesContainer.clientHeight>=messagesContainer.scrollHeight-150);if(shouldScroll){scrollToBottom()}}
-        function loadMessageHistory(history){messagesContainer.innerHTML='';if(history&&history.length>0){addMessage({type:'system',msg:`--- Displaying last ${history.length} messages ---`,timestamp:''});history.forEach(msgData=>addMessage(msgData,true))}else{addMessage({type:'system',msg:'No previous messages in this room.',timestamp:''})}scrollToBottom()}
-        function updateUserList(usernames){userList.innerHTML='';usernames.sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));usernames.forEach(username=>{const item=document.createElement('li');const avatar=createUserAvatar(username);const nameSpan=document.createElement('span');nameSpan.textContent=escapeHTML(username);item.appendChild(avatar);item.appendChild(nameSpan);userList.appendChild(item)});userListHeader.textContent=`Online Users (${usernames.length})`}
-        function updateTypingIndicator(){const typingUsernames=Object.values(usersTyping).map(u=>u.username);if(typingUsernames.length===0){typingIndicator.textContent=''}else if(typingUsernames.length===1){typingIndicator.textContent=`${escapeHTML(typingUsernames[0])} is typing...`}else if(typingUsernames.length===2){typingIndicator.textContent=`${escapeHTML(typingUsernames[0])} and ${escapeHTML(typingUsernames[1])} are typing...`}else{typingIndicator.textContent='Several people are typing...'}}
+        // --- Socket.IO Connection ---
+        const socket = io({
+             reconnectionAttempts: 5,
+             reconnectionDelay: 2000, // Increased delay
+             timeout: 10000, // Connection timeout
+        });
 
-        usernameButton.addEventListener('click',()=>{const username=usernameInput.value.trim();if(username){currentUsername=username;usernameError.textContent='';usernameModal.style.display='none';enableChatInterface();joinRoom(roomInput.value.trim().toLowerCase()||'general')}else{usernameError.textContent='Please enter a valid username.'}});
-        usernameInput.addEventListener('keypress',e=>{if(e.key==='Enter'){usernameButton.click()}});
-        joinRoomButton.addEventListener('click',()=>{const roomName=roomInput.value.trim().toLowerCase();if(roomName&¤tUsername){joinRoom(roomName)}else if(!currentUsername){alert("Please set username first.")}else{alert("Please enter room name.")}});
-        roomInput.addEventListener('keypress',e=>{if(e.key==='Enter'){joinRoomButton.click()}});
-        messageInputForm.addEventListener('submit',e=>{e.preventDefault();const messageText=messageInput.value.trim();if(messageText&¤tUsername&¤tRoom){socket.emit('send_message',{msg:messageText});messageInput.value='';if(isTyping){socket.emit('typing',{is_typing:false});isTyping=false}messageInput.focus()}});
-        messageInput.addEventListener('input',()=>{if(!currentUsername||!currentRoom)return;if(!isTyping){isTyping=true;socket.emit('typing',{is_typing:true})}lastTypingTime=Date.now();setTimeout(()=>{if(isTyping&&(Date.now()-lastTypingTime>=TYPING_TIMER_LENGTH)){socket.emit('typing',{is_typing:false});isTyping=false}},TYPING_TIMER_LENGTH)});
-        emojiButton.addEventListener('click',e=>{e.stopPropagation();emojiPicker.style.display=emojiPicker.style.display==='none'?'block':'none'});
-        emojiPicker.addEventListener('emoji-click',event=>{messageInput.value+=event.detail.unicode;emojiPicker.style.display='none';messageInput.focus()});
-        document.addEventListener('click',event=>{if(emojiPicker.style.display!=='none'&&!emojiPicker.contains(event.target)&&event.target!==emojiButton){emojiPicker.style.display='none'}});
-        soundToggle.addEventListener('click',()=>{soundEnabled=!soundEnabled;updateSoundToggleUI();if(soundEnabled){playNotificationSound()}});
-        window.addEventListener('focus',()=>{isWindowFocused=true});window.addEventListener('blur',()=>{isWindowFocused=false});
+        // --- Utility Functions ---
 
-        function joinRoom(roomName){if(!currentUsername||!roomName)return;console.log(`Attempting to join room: ${roomName} as ${currentUsername}`);messagesContainer.innerHTML='';userList.innerHTML='';userListHeader.textContent='Online Users';typingIndicator.textContent='';currentRoom=null;currentRoomNameSpan.textContent=`Joining ${roomName}...`;disableChatInterface();socket.emit('join_room',{username:currentUsername,room:roomName})}
-        socket.on('connect',()=>{console.log('Connected:',socket.id);if(!currentUsername){usernameModal.style.display='flex';disableChatInterface();usernameInput.focus()}else{const roomToRejoin=(roomInput.value.trim().toLowerCase()||'general');console.log(`Reconnected. Rejoining: ${roomToRejoin}`);joinRoom(roomToRejoin)}});
-        socket.on('disconnect',reason=>{console.log('Disconnected:',reason);addMessage({type:'error',msg:`Disconnected: ${reason}. Reconnecting...`,timestamp:''});userList.innerHTML='<li><i>Disconnected</i></li>';userListHeader.textContent='Offline';typingIndicator.textContent='';usersTyping={};currentRoomNameSpan.textContent="Disconnected";currentRoom=null;disableChatInterface()});
-        socket.on('connect_error',err=>{console.error('Connection Error:',err);addMessage({type:'error',msg:`Connection failed: ${err.message}.`,timestamp:''});if(usernameModal.style.display==='flex'){usernameError.textContent=`Connection Failed`}disableChatInterface()});
-        socket.on('room_joined',(data)=>{const{username,room,history}=data;console.log(`Joined room: ${room}`);if(username===currentUsername){currentRoom=room;currentRoomNameSpan.textContent=`Room: ${room}`;roomInput.value=room;loadMessageHistory(history);enableChatInterface();messageInput.focus()}else{console.warn("Received room_joined for unexpected user:",username)}});
-        socket.on('error',data=>{console.error('Server Error:',data.msg);addMessage({type:'error',msg:`Error: ${data.msg}`,timestamp:''});if(!currentRoom&¤tUsername){enableChatInterface();currentRoomNameSpan.textContent="Error Joining"}if(usernameModal.style.display==='flex'){usernameError.textContent=data.msg}});
-        socket.on('receive_message',data=>{if(data.room===currentRoom){addMessage(data);if(data.username&&usersTyping[data.username]){clearTimeout(usersTyping[data.username].timeoutId);delete usersTyping[data.username];updateTypingIndicator()}}});
-        socket.on('update_user_list',data=>{if(data.room===currentRoom){updateUserList(data.users)}});
-        socket.on('user_typing',data=>{if(data.room===currentRoom&&data.username!==currentUsername){const{username,is_typing}=data;if(is_typing){if(usersTyping[username]){clearTimeout(usersTyping[username].timeoutId)}usersTyping[username]={username:username,timeoutId:setTimeout(()=>{delete usersTyping[username];updateTypingIndicator()},TYPING_DISPLAY_TIMER_LENGTH)}}else{if(usersTyping[username]){clearTimeout(usersTyping[username].timeoutId);delete usersTyping[username]}}updateTypingIndicator()}});
+        function getUserInitials(username) {
+            if (!username) return '?';
+            const parts = username.split(/[ _-]/); // Split by space, underscore, hyphen
+            // Ensure parts[1] exists before accessing parts[1][0]
+            return parts.length === 1 ? username.substring(0, 2).toUpperCase() : (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+        }
 
-        function initializeApp(){disableChatInterface();updateSoundToggleUI();usernameModal.style.display='flex';usernameInput.focus()}
-        initializeApp();
+        function getAvatarColor(username) {
+             // Simple hash function to get a somewhat consistent color based on username
+             let hash = 0;
+             if (!username) return AVATAR_COLORS[0]; // Default color
+             for (let i = 0; i < username.length; i++) {
+                hash = username.charCodeAt(i) + ((hash << 5) - hash);
+                hash = hash & hash; // Convert to 32bit integer
+             }
+             // Use the predefined color array
+             return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+        }
+
+        function createUserAvatar(username) {
+            const avatar = document.createElement('div');
+            avatar.className = `user-avatar`;
+            avatar.style.backgroundColor = getAvatarColor(username); // Set color directly
+            avatar.textContent = getUserInitials(username);
+            avatar.title = username; // Tooltip with full name
+            return avatar;
+        }
+
+        function escapeHTML(str) {
+             if (typeof str !== 'string') return '';
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+         function formatMessageContent(text) {
+            // Basic URL detection and linking
+            const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+            return text.replace(urlRegex, function(url) {
+                // Ensure the captured URL is properly escaped in the href attribute if needed, though browsers are generally robust
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--link-color);">${escapeHTML(url)}</a>`;
+            });
+         }
+
+        function scrollToBottom() {
+            // Give the browser a moment to render before scrolling
+            setTimeout(() => {
+                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 50);
+        }
+
+        function playNotificationSound() {
+             // Check if context is available (might need user interaction first)
+             if (notificationSound.readyState >= 2) { // HAVE_CURRENT_DATA or more
+                 notificationSound.currentTime = 0; // Rewind first
+                 notificationSound.play().catch(error => console.warn("Sound play failed:", error)); // Play might be blocked by browser
+             } else {
+                 console.warn("Notification sound not ready to play.");
+             }
+        }
+
+        function updateSoundToggleUI() {
+             soundToggle.className = soundEnabled ? 'sound-on' : 'sound-off';
+             soundToggle.textContent = soundEnabled ? 'Sound ON' : 'Sound OFF';
+             soundToggle.title = soundEnabled ? 'Click to Mute Notifications' : 'Click to Unmute Notifications';
+        }
+
+        function enableChatInterface() {
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            emojiButton.disabled = false;
+            // Only enable room joining if username is set but room is not
+            if (currentUsername && !currentRoom) {
+                roomInput.disabled = false;
+                joinRoomButton.disabled = false;
+                roomInput.focus();
+            } else if (currentUsername && currentRoom) { // Enable message input only after joining a room
+                 messageInput.focus();
+            }
+        }
+
+        function disableChatInterface() {
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            emojiButton.disabled = true;
+            roomInput.disabled = true;
+            joinRoomButton.disabled = true;
+             emojiPicker.style.display = 'none'; // Hide picker if disabled
+        }
+
+
+        // --- Core Logic Functions ---
+
+        function addMessage(data, isHistory = false) {
+            const { msg, username, timestamp, type = 'user', room } = data;
+
+            // Critical check: Only add message if it belongs to the currently active room
+            if (room && room !== currentRoom) {
+                console.log(`Ignoring message for room ${room}, current room is ${currentRoom}`);
+                return;
+            }
+
+            const messageElement = document.createElement('li');
+            messageElement.classList.add(`message-${type}`); // user, system, status, error
+
+            if (type === 'user') {
+                 const messageContainer = document.createElement('div');
+                 messageContainer.classList.add('message-container');
+
+                 const isMyMsg = username === currentUsername;
+                 messageContainer.classList.add(isMyMsg ? 'my-message' : 'other-message');
+
+                 const avatarElement = createUserAvatar(username);
+
+                 const messageContent = document.createElement('div');
+                 messageContent.classList.add('message-content');
+
+                 // Add username and timestamp meta line
+                 const metaSpan = document.createElement('span');
+                 metaSpan.classList.add('message-meta');
+                 // Display only username for other messages for cleaner look? Optional.
+                 // metaSpan.textContent = `${isMyMsg ? username : username} - ${timestamp || ''}`;
+                 metaSpan.textContent = `${username} - ${timestamp || ''}`;
+
+                 const bubbleSpan = document.createElement('span');
+                 bubbleSpan.classList.add('message-bubble');
+                 bubbleSpan.innerHTML = formatMessageContent(escapeHTML(msg)); // Use innerHTML for potential links
+
+                 messageContent.appendChild(metaSpan); // Meta first
+                 messageContent.appendChild(bubbleSpan); // Then bubble
+
+                 messageContainer.appendChild(avatarElement); // Avatar added (CSS handles order)
+                 messageContainer.appendChild(messageContent); // Content added (CSS handles order)
+
+                 messageElement.appendChild(messageContainer);
+
+                 // Play sound only for new, non-history messages from others when enabled and window blurred
+                 if (!isHistory && !isMyMsg && soundEnabled && !isWindowFocused) {
+                     playNotificationSound();
+                 }
+
+            } else { // System, Status, Error messages
+                 messageElement.innerHTML = `<span class="message-text">${escapeHTML(msg)}</span> <span class="message-timestamp">${timestamp || ''}</span>`;
+            }
+
+            messagesContainer.appendChild(messageElement);
+
+            // Scroll only if near the bottom or it's a message from the current user or system message
+            const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 100; // Tolerance
+            if (isHistory || (username === currentUsername) || isScrolledToBottom || type !== 'user') {
+                scrollToBottom();
+            }
+        }
+
+        function loadMessageHistory(history) {
+             messagesContainer.innerHTML = ''; // Clear existing messages
+             if (history && history.length > 0) {
+                addMessage({ type: 'system', room: currentRoom, msg: `--- Displaying last ${history.length} messages ---`, timestamp: '' }, true);
+                history.forEach(msgData => addMessage(msgData, true)); // Mark as history message
+             } else {
+                 addMessage({ type: 'system', room: currentRoom, msg: 'No previous messages in this room.', timestamp: '' }, true);
+             }
+             // Ensure scroll happens after history is potentially loaded
+             setTimeout(scrollToBottom, 100);
+        }
+
+        function updateUserList(usernames) {
+            userList.innerHTML = ''; // Clear current list
+            usernames.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())); // Sort
+            usernames.forEach(username => {
+                const item = document.createElement('li');
+                const avatar = createUserAvatar(username);
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = escapeHTML(username);
+                item.appendChild(avatar);
+                item.appendChild(nameSpan);
+                userList.appendChild(item);
+            });
+            userListHeader.textContent = `Online Users (${usernames.length})`;
+        }
+
+        function updateTypingIndicator() {
+            const typingUsernames = Object.values(usersTyping).map(u => u.username); // Get names from stored objects
+            if (typingUsernames.length === 0) {
+                typingIndicator.textContent = '';
+            } else if (typingUsernames.length === 1) {
+                typingIndicator.textContent = `${escapeHTML(typingUsernames[0])} is typing...`;
+            } else if (typingUsernames.length === 2) {
+                 typingIndicator.textContent = `${escapeHTML(typingUsernames[0])} and ${escapeHTML(typingUsernames[1])} are typing...`;
+            } else {
+                typingIndicator.textContent = 'Several people are typing...';
+            }
+        }
+
+        // --- Event Listeners ---
+
+        usernameButton.addEventListener('click', () => {
+            const username = usernameInput.value.trim();
+            if (username) {
+                // Don't set currentUsername here yet, wait for server confirmation via join_room
+                usernameError.textContent = '';
+                usernameModal.style.display = 'none'; // Hide modal immediately
+                enableChatInterface(); // Enable room joining parts
+                // Attempt to join the default/entered room
+                const roomToJoin = roomInput.value.trim().toLowerCase() || 'general';
+                joinRoom(username, roomToJoin); // Pass username to join function
+            } else {
+                usernameError.textContent = 'Please enter a valid username.';
+            }
+        });
+
+        usernameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                usernameButton.click(); // Trigger button click on Enter
+            }
+        });
+
+        joinRoomButton.addEventListener('click', () => {
+            const roomName = roomInput.value.trim().toLowerCase();
+            if (roomName && currentUsername) { // Check if username is set *from server confirmation*
+                 joinRoom(currentUsername, roomName);
+            } else if (!currentUsername) {
+                 // This case might happen if user tries joining before initial join confirmation
+                 alert("Please wait for username confirmation or refresh.");
+                 usernameModal.style.display = 'flex'; // Show modal again
+                 disableChatInterface();
+            } else {
+                 alert("Please enter a room name.");
+            }
+        });
+
+         roomInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                joinRoomButton.click();
+            }
+        });
+
+        messageInputForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const messageText = messageInput.value.trim();
+            if (messageText && currentUsername && currentRoom) {
+                socket.emit('send_message', { msg: messageText });
+                messageInput.value = ''; // Clear input field
+                // Stop broadcasting typing after sending
+                if(isTyping) {
+                     socket.emit('typing', { is_typing: false });
+                     isTyping = false;
+                }
+                 messageInput.focus(); // Keep focus on input
+            }
+        });
+
+        messageInput.addEventListener('input', () => {
+            if (!currentUsername || !currentRoom) return;
+
+            if (!isTyping) {
+                isTyping = true;
+                socket.emit('typing', { is_typing: true });
+            }
+            lastTypingTime = Date.now();
+
+            // Use a single timeout that checks if typing stopped
+            setTimeout(() => {
+                if (isTyping && (Date.now() - lastTypingTime >= TYPING_TIMER_LENGTH)) {
+                    socket.emit('typing', { is_typing: false });
+                    isTyping = false;
+                }
+            }, TYPING_TIMER_LENGTH);
+        });
+
+        emojiButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent closing if clicked again immediately
+            emojiPicker.style.display = (emojiPicker.style.display === 'none' ? 'block' : 'none');
+        });
+
+        emojiPicker.addEventListener('emoji-click', event => {
+            messageInput.value += event.detail.unicode;
+            emojiPicker.style.display = 'none';
+            messageInput.focus();
+        });
+
+         // Close emoji picker if clicking outside
+         document.addEventListener('click', (event) => {
+             if (emojiPicker.style.display !== 'none' && !emojiPicker.contains(event.target) && event.target !== emojiButton) {
+                 emojiPicker.style.display = 'none';
+             }
+         });
+
+         soundToggle.addEventListener('click', () => {
+             soundEnabled = !soundEnabled;
+             updateSoundToggleUI();
+              // Try to play a short sound on enable to test/prompt for permission
+             if (soundEnabled) {
+                 playNotificationSound();
+             }
+         });
+
+         window.addEventListener('focus', () => { isWindowFocused = true; });
+         window.addEventListener('blur', () => { isWindowFocused = false; });
+
+
+        // --- Socket.IO Handlers ---
+
+        function joinRoom(usernameToJoin, roomNameToJoin) {
+             if (!usernameToJoin || !roomNameToJoin) return;
+             console.log(`Attempting to join room: ${roomNameToJoin} as ${usernameToJoin}`);
+             // Clear previous room state visually BEFORE sending join request
+             messagesContainer.innerHTML = '';
+             userList.innerHTML = '';
+             userListHeader.textContent = 'Online Users';
+             typingIndicator.textContent = '';
+             // currentRoom = null; // Don't nullify currentRoom yet, wait for confirmation/error
+             currentRoomNameSpan.textContent = `Joining ${roomNameToJoin}...`;
+             disableChatInterface(); // Disable input while joining
+
+             // Send join request
+             socket.emit('join_room', { username: usernameToJoin, room: roomNameToJoin });
+        }
+
+        socket.on('connect', () => {
+            console.log('Socket Connected:', socket.id);
+            // If we already have a confirmed username (e.g., after reconnect), try rejoining
+            if (currentUsername && currentRoom) {
+                console.log(`Reconnected. Attempting to rejoin room: ${currentRoom} as ${currentUsername}`);
+                joinRoom(currentUsername, currentRoom);
+            } else {
+                // On initial connect, show username modal
+                usernameModal.style.display = 'flex';
+                disableChatInterface();
+                usernameInput.focus();
+            }
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('Socket Disconnected:', reason);
+            addMessage({ type: 'error', room: currentRoom, msg: `Disconnected: ${reason}. Attempting to reconnect...`, timestamp: ''});
+            // Clear UI related to the room
+            userList.innerHTML = '<li><i>Disconnected</i></li>';
+            userListHeader.textContent = 'Offline';
+            typingIndicator.textContent = '';
+            usersTyping = {};
+            currentRoomNameSpan.textContent = "Disconnected";
+            // currentRoom = null; // Keep currentRoom potentially for rejoin attempt
+            disableChatInterface(); // Disable everything until reconnected
+        });
+
+        socket.on('connect_error', (err) => {
+          console.error('Connection Error:', err);
+          addMessage({ type: 'error', room: currentRoom, msg: `Connection failed: ${err.message}. Check server and network.`, timestamp: '' });
+          // Show error in modal if it's visible
+          if (usernameModal.style.display === 'flex') {
+              usernameError.textContent = `Connection Failed: ${err.message}`;
+          }
+          disableChatInterface();
+        });
+
+        socket.on('room_joined', (data) => {
+            const { username, room, history } = data;
+            console.log(`Server confirmed join for room: ${room} as ${username}`);
+            // IMPORTANT: Set currentUsername and currentRoom only upon server confirmation
+            currentUsername = username;
+            currentRoom = room;
+
+            currentRoomNameSpan.textContent = `Room: ${room}`;
+            roomInput.value = room; // Update input field to current room
+            loadMessageHistory(history);
+            enableChatInterface(); // Fully enable chat now
+            messageInput.focus();
+            usernameModal.style.display = 'none'; // Ensure modal is hidden
+        });
+
+        socket.on('error', (data) => {
+            console.error('Server Error:', data.msg);
+            // Display error prominently in the chat area
+            addMessage({ type: 'error', room: currentRoom, msg: `Error: ${data.msg}`, timestamp: '' });
+
+            // If error occurred during join attempt (currentRoom not set yet)
+            if (!currentRoom) {
+                 currentRoomNameSpan.textContent = "Error Joining Room";
+                 // Re-enable room joining controls *if* username was likely set locally
+                 // This is tricky, might be better to just show username prompt again
+                 usernameModal.style.display = 'flex';
+                 disableChatInterface(); // Ensure everything is disabled except prompt
+                 usernameError.textContent = data.msg; // Show error in modal
+                 currentUsername = null; // Reset local username state
+            }
+            // If modal is somehow visible, show error there too
+            if (usernameModal.style.display === 'flex') {
+                 usernameError.textContent = data.msg;
+            }
+        });
+
+        socket.on('receive_message', (data) => {
+            // Add safety check: only process message if it's for the current room
+            if (data.room === currentRoom) {
+                console.log('Message received for current room:', data);
+                addMessage(data);
+                 // Clear typing indicator for the sender if they were typing
+                 // Check if usersTyping[data.username] exists before accessing timeoutId
+                if (data.username && usersTyping[data.username]) {
+                    clearTimeout(usersTyping[data.username].timeoutId);
+                    delete usersTyping[data.username];
+                    updateTypingIndicator();
+                }
+            } else {
+                 console.log("Received message for different room, ignoring:", data.room, "Current:", currentRoom);
+            }
+        });
+
+        socket.on('update_user_list', (data) => {
+            // Only update list if it's for the current room
+            if (data.room === currentRoom) {
+                updateUserList(data.users);
+            }
+        });
+
+        socket.on('user_typing', (data) => {
+            // Only show typing if it's for the current room and not self
+            if (data.room === currentRoom && data.username !== currentUsername) {
+                 const { username, is_typing } = data;
+                 if (is_typing) {
+                     // If a timeout already exists for this user, clear it first
+                     if (usersTyping[username]) {
+                         clearTimeout(usersTyping[username].timeoutId);
+                     }
+                     // Store username along with timeoutId
+                     usersTyping[username] = {
+                         username: username,
+                         timeoutId: setTimeout(() => {
+                            delete usersTyping[username];
+                            updateTypingIndicator();
+                         }, TYPING_DISPLAY_TIMER_LENGTH) // Remove after X seconds of inactivity
+                     };
+                 } else {
+                     // If server says user stopped typing, remove immediately
+                     if (usersTyping[username]) {
+                         clearTimeout(usersTyping[username].timeoutId);
+                         delete usersTyping[username];
+                     }
+                 }
+                 updateTypingIndicator();
+            }
+        });
+
+        // --- Initial Page Load ---
+        function initializeApp() {
+            disableChatInterface(); // Start disabled
+            updateSoundToggleUI();
+            // Show username modal on load
+            usernameModal.style.display = 'flex';
+            usernameInput.focus();
+        }
+
+        // Wait for the DOM to be fully loaded before initializing
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
     </script>
 </body>
 </html>
