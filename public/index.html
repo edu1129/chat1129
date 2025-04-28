@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Chat (No History)</title>
+    <style>
+        :root {
+            --background-color: #f0f2f5;
+            --chat-background: #ffffff;
+            --input-background: #ffffff;
+            --text-color: #050505;
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --my-message-bg: #dcf8c6;
+            --other-message-bg: #ffffff;
+            --notification-color: #888;
+            --error-color: #dc3545;
+            --border-color: #e0e0e0;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            background-color: var(--background-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: var(--text-color);
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #chat-container {
+            background-color: var(--chat-background);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 600px;
+            height: 85vh;
+            max-height: 700px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        #header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+
+        #messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 75%;
+            word-wrap: break-word;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+        }
+
+        .message.mine {
+            background-color: var(--my-message-bg);
+            align-self: flex-end;
+            border-radius: 18px 18px 5px 18px;
+        }
+
+        .message.other {
+            background-color: var(--other-message-bg);
+            align-self: flex-start;
+            border: 1px solid #eee;
+            border-radius: 18px 18px 18px 5px;
+        }
+
+        .message .sender {
+            font-weight: 600;
+            font-size: 0.85em;
+            margin-bottom: 4px;
+            color: var(--primary-color);
+            display: block; /* Ensure it takes its own line */
+        }
+
+        .message.mine .sender {
+             color: #075e54; /* Slightly different color for own messages */
+        }
+
+
+        .message .timestamp {
+            font-size: 0.75em;
+            color: #999;
+            margin-top: 5px;
+            text-align: right;
+            display: block;
+        }
+
+        .notification, .error {
+            text-align: center;
+            font-size: 0.85em;
+            color: var(--notification-color);
+            margin: 5px 0;
+            padding: 5px;
+            width: fit-content;
+            align-self: center;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+        }
+        .error {
+            color: var(--error-color);
+             background-color: #f8d7da;
+             border: 1px solid #f5c6cb;
+        }
+
+
+        #input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--background-color);
+        }
+
+        #message-input {
+            flex-grow: 1;
+            padding: 10px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            margin-right: 10px;
+            font-size: 1em;
+            background-color: var(--input-background);
+        }
+        #message-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
+        #send-button {
+            padding: 10px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background-color 0.2s ease;
+        }
+
+        #send-button:hover {
+            background-color: var(--primary-hover);
+        }
+         #send-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #status {
+            text-align: center;
+            padding: 5px;
+            font-size: 0.8em;
+            color: #666;
+            background-color: #e9ecef;
+            height: 20px; /* Fixed height to prevent layout shifts */
+            line-height: 20px;
+             border-top: 1px solid var(--border-color);
+        }
+
+        /* Scrollbar styling (optional) */
+        #messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        #messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #messages::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+        #messages::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="header">Real-Time Chat</div>
+        <div id="status">Connecting...</div>
+        <div id="messages"></div>
+        <form id="input-area">
+            <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off" required>
+            <button type="submit" id="send-button" disabled>Send</button>
+        </form>
+    </div>
+
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('message-input');
+        const inputAreaForm = document.getElementById('input-area');
+        const sendButton = document.getElementById('send-button');
+        const statusDiv = document.getElementById('status');
+
+        let username = '';
+        let ws = null;
+
+        function getWebSocketURL() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host; // Includes hostname and port if specified
+            return `${protocol}//${host}`;
+        }
+
+        function promptForUsername() {
+            username = prompt("Please enter your username:", `User_${Math.floor(Math.random() * 1000)}`);
+            if (!username || username.trim() === '') {
+                username = `Anonymous_${Math.floor(Math.random() * 1000)}`;
+            }
+            username = username.trim();
+             // Update header or add username display somewhere if desired
+             // document.getElementById('header').textContent = `Real-Time Chat - ${username}`;
+        }
+
+        function connectWebSocket() {
+            const wsURL = getWebSocketURL();
+            ws = new WebSocket(wsURL);
+             statusDiv.textContent = `Connecting to ${wsURL}...`;
+             sendButton.disabled = true;
+
+
+            ws.onopen = () => {
+                console.log('WebSocket connection established');
+                statusDiv.textContent = 'Connected';
+                sendButton.disabled = false;
+                addNotification(`You joined as ${username}`);
+                 // Server already sends welcome and join notifications
+            };
+
+            ws.onmessage = (event) => {
+                console.log('Message from server:', event.data);
+                try {
+                    const messageData = JSON.parse(event.data);
+                    displayMessage(messageData);
+                } catch (e) {
+                    console.error('Failed to parse message JSON:', e);
+                     addError('Received malformed message from server.');
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket connection closed');
+                statusDiv.textContent = 'Disconnected. Attempting to reconnect...';
+                 sendButton.disabled = true;
+                 addNotification('Connection lost. Reconnecting...');
+                // Attempt to reconnect after a delay
+                setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                statusDiv.textContent = 'Connection Error';
+                 sendButton.disabled = true;
+                addError('WebSocket connection error. Check console for details.');
+                // ws.close() will likely be called automatically after an error
+            };
+        }
+
+         function addNotification(text) {
+            const notificationElement = document.createElement('div');
+            notificationElement.classList.add('notification');
+            notificationElement.textContent = text;
+            messagesDiv.appendChild(notificationElement);
+            scrollToBottom();
+        }
+
+         function addError(text) {
+            const errorElement = document.createElement('div');
+            errorElement.classList.add('error');
+            errorElement.textContent = text;
+            messagesDiv.appendChild(errorElement);
+            scrollToBottom();
+        }
+
+
+        function displayMessage(messageData) {
+            if (!messageData || !messageData.type) return;
+
+             if(messageData.type === 'notification') {
+                addNotification(messageData.payload);
+                return;
+            }
+             if(messageData.type === 'error') {
+                addError(messageData.payload);
+                return;
+            }
+
+            if (messageData.type === 'message' && messageData.payload && messageData.sender) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+
+                // Determine if the message is from the current user or another user
+                const isMine = messageData.sender === username;
+                messageElement.classList.add(isMine ? 'mine' : 'other');
+
+                const senderSpan = document.createElement('span');
+                senderSpan.classList.add('sender');
+                // Show sender name only for messages from others unless it's the first message or different sender
+                 if (!isMine) {
+                    senderSpan.textContent = messageData.sender;
+                     messageElement.appendChild(senderSpan);
+                } else {
+                     // Optionally add a subtle indicator like 'You'
+                     // senderSpan.textContent = 'You';
+                     // messageElement.appendChild(senderSpan);
+                }
+
+
+                const contentDiv = document.createElement('div');
+                contentDiv.textContent = messageData.payload;
+                messageElement.appendChild(contentDiv);
+
+
+                 const timeSpan = document.createElement('span');
+                timeSpan.classList.add('timestamp');
+                timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                messageElement.appendChild(timeSpan);
+
+
+                messagesDiv.appendChild(messageElement);
+                scrollToBottom();
+            } else {
+                console.warn("Received unhandled message structure: ", messageData);
+            }
+        }
+
+        function sendMessage() {
+            const messageText = messageInput.value.trim();
+            if (messageText && ws && ws.readyState === WebSocket.OPEN) {
+                const messageObj = {
+                    type: 'message',
+                    sender: username,
+                    payload: messageText
+                };
+                ws.send(JSON.stringify(messageObj));
+
+                // Display own message immediately
+                displayMessage(messageObj);
+
+                messageInput.value = '';
+                messageInput.focus();
+            } else if (!ws || ws.readyState !== WebSocket.OPEN) {
+                 addError("Not connected to the chat server.");
+            }
+        }
+
+        function scrollToBottom() {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Event Listeners
+        inputAreaForm.addEventListener('submit', (event) => {
+            event.preventDefault(); // Prevent page refresh
+            sendMessage();
+        });
+
+        // Initial setup
+        promptForUsername();
+        connectWebSocket();
+
+         // Add focus back to input after modal/prompt (helps UX)
+         messageInput.focus();
+
+    </script>
+</body>
+</html>
