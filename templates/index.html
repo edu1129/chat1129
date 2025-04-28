@@ -1,237 +1,131 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Chat</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" integrity="sha512-Xm9qbB6Pu06k3PUwPj785dyhGMkLLWRGWF99xO3pvMAXCEKJJXKfp09FG1Nx/+GFhgbCSB7BjyTWvc4Y/GtpTQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <title>Insaan Ya Kuch Aur?</title>
     <style>
-        #chat-container { height: calc(100vh - 100px); }
-        #messages-box { scroll-behavior: smooth; }
-        .message-bubble { max-width: 75%; }
-        .my-message .message-bubble { background-color: #DCF8C6; } /* WhatsApp green */
-        .other-message .message-bubble { background-color: #FFFFFF; }
-        /* Hide scrollbar but allow scrolling */
-        #messages-box::-webkit-scrollbar { display: none; }
-        #messages-box { -ms-overflow-style: none; scrollbar-width: none; }
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .result.human {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .result.other {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none; /* Hidden by default */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
-<body class="bg-gray-100 flex flex-col h-screen">
+<body>
+    <div class="container">
+        <h1>Image Upload Karke Check Karein</h1>
+        <form method="post" enctype="multipart/form-data" onsubmit="showLoader()">
+            <input type="file" name="file" accept="image/*" required>
+            <button type="submit">Check Karein</button>
+        </form>
 
-    <div id="name-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-lg shadow-xl">
-            <h2 class="text-xl font-semibold mb-4">Enter Your Name</h2>
-            <input type="text" id="name-input" class="border border-gray-300 p-2 w-full rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Your Name">
-            <button id="submit-name" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded w-full">Join Chat</button>
+        <div id="loader" class="loader"></div>
+
+        {% if result %}
+        <div class="result {{ 'human' if is_human else 'other' }}">
+            <p>{{ result }}</p>
+            {% if prediction_label and not is_human %}
+            <p>(Pehchana gaya: {{ prediction_label }})</p>
+            {% endif %}
         </div>
-    </div>
+        {% endif %}
 
-    <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 class="text-2xl font-bold">Real-Time Chat</h1>
-        <div class="text-sm">Welcome, <span id="display-name" class="font-semibold">Guest</span>!</div>
-    </header>
-
-    <div class="flex flex-grow overflow-hidden">
-        <!-- User List Sidebar -->
-        <aside class="w-48 md:w-64 bg-gray-200 p-4 overflow-y-auto border-r border-gray-300">
-            <h2 class="text-lg font-semibold mb-3 border-b pb-2">Online Users (<span id="user-count">0</span>)</h2>
-            <ul id="user-list" class="space-y-1">
-                <!-- User list items will be added here -->
-            </ul>
-        </aside>
-
-        <!-- Chat Area -->
-        <main class="flex-grow flex flex-col bg-gray-50">
-            <div id="chat-container" class="flex-grow p-4 overflow-y-auto" >
-                <div id="messages-box" class="space-y-4">
-                    <!-- Messages will appear here -->
-                     <div class="text-center text-gray-500 text-sm my-4">
-                        Welcome to the chat! Messages will appear here.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Message Input Form -->
-            <footer class="bg-gray-100 p-4 border-t border-gray-300">
-                <form id="message-form" class="flex items-center space-x-3">
-                    <input id="message-input" type="text" placeholder="Type your message..." autocomplete="off" required
-                           class="flex-grow border border-gray-300 rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-                        </svg>
-                    </button>
-                </form>
-            </footer>
-        </main>
+        {% if error %}
+        <div class="result other">
+             <p>Error: {{ error }}</p>
+        </div>
+        {% endif %}
     </div>
 
     <script>
-        const socket = io({ autoConnect: false }); // Connect manually after getting name
-        const messagesBox = document.getElementById('messages-box');
-        const messageForm = document.getElementById('message-form');
-        const messageInput = document.getElementById('message-input');
-        const userList = document.getElementById('user-list');
-        const userCount = document.getElementById('user-count');
-        const nameModal = document.getElementById('name-modal');
-        const nameInput = document.getElementById('name-input');
-        const submitNameButton = document.getElementById('submit-name');
-        const displayName = document.getElementById('display-name');
-
-        let myUsername = '';
-        let mySid = '';
-
-        const scrollToBottom = () => {
-            messagesBox.scrollTop = messagesBox.scrollHeight;
-        };
-
-        const addNotification = (msg) => {
-            const item = document.createElement('div');
-            item.className = 'text-center text-gray-500 text-sm my-2 italic';
-            item.textContent = msg;
-            messagesBox.appendChild(item);
-            scrollToBottom();
-        };
-
-        const addMessage = (data) => {
-            const isMine = data.sid === mySid;
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `flex ${isMine ? 'justify-end my-message' : 'justify-start other-message'}`;
-
-            const bubble = document.createElement('div');
-            bubble.className = 'message-bubble rounded-lg px-4 py-2 shadow';
-
-            const nameSpan = document.createElement('div');
-            nameSpan.className = `text-xs font-semibold mb-1 ${isMine ? 'text-right text-green-700' : 'text-blue-700'}`;
-            nameSpan.textContent = isMine ? 'You' : data.name;
-
-            const msgP = document.createElement('p');
-            msgP.className = 'text-sm';
-            msgP.textContent = data.msg;
-
-            bubble.appendChild(nameSpan);
-            bubble.appendChild(msgP);
-            messageDiv.appendChild(bubble);
-            messagesBox.appendChild(messageDiv);
-            scrollToBottom();
-        };
-
-        const updateUserList = (users) => {
-            userList.innerHTML = '';
-            userCount.textContent = users.length;
-            users.sort();
-            users.forEach(user => {
-                const item = document.createElement('li');
-                item.className = 'text-gray-700 text-sm flex items-center space-x-2';
-                const statusDot = document.createElement('span');
-                statusDot.className = 'h-2 w-2 bg-green-500 rounded-full inline-block';
-                item.appendChild(statusDot);
-                const nameText = document.createElement('span');
-                nameText.textContent = user;
-                if (user === myUsername) {
-                    nameText.classList.add('font-semibold');
-                    nameText.textContent += ' (You)';
-                }
-                item.appendChild(nameText);
-
-                userList.appendChild(item);
-            });
-        };
-
-        const handleNameSubmit = () => {
-             const name = nameInput.value.trim();
-            if (name) {
-                socket.connect(); // Now connect to the server
-                socket.emit('set_name', name);
-            } else {
-                alert('Please enter a valid name.');
+        function showLoader() {
+            // Hide previous result if any
+            const resultDiv = document.querySelector('.result');
+            if (resultDiv) {
+                resultDiv.style.display = 'none';
             }
-        };
+            // Show loader
+            document.getElementById('loader').style.display = 'block';
+        }
 
-        submitNameButton.addEventListener('click', handleNameSubmit);
-        nameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleNameSubmit();
-            }
-        });
-
-        messageForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const msg = messageInput.value.trim();
-            if (msg && myUsername) {
-                socket.emit('send_message', { msg: msg });
-                messageInput.value = '';
-                messageInput.focus();
-            }
-        });
-
-        socket.on('request_name', () => {
-            // This ensures the modal is shown if somehow bypassed or on reconnect without name
-            nameModal.classList.remove('hidden');
-            nameModal.classList.add('flex');
-            nameInput.focus();
-        });
-
-        socket.on('name_accepted', (data) => {
-            myUsername = data.name;
-            mySid = data.sid;
-            displayName.textContent = myUsername;
-            nameModal.classList.add('hidden');
-            nameModal.classList.remove('flex');
-            messageInput.focus();
-            // Clear initial welcome message if present
-             const initialMsg = messagesBox.querySelector('.text-gray-500');
-             if (initialMsg && initialMsg.textContent.includes('Welcome')) {
-                 messagesBox.innerHTML = ''; // Clear placeholder
+        // Hide loader if page is reloaded with a result (e.g., form submission complete)
+        window.onload = function() {
+             const resultDiv = document.querySelector('.result');
+             if (resultDiv && resultDiv.textContent.trim() !== '') {
+                  document.getElementById('loader').style.display = 'none';
              }
-             addNotification(`You joined as ${myUsername}`);
-        });
-
-        socket.on('new_message', (data) => {
-            addMessage(data);
-        });
-
-        socket.on('notification', (data) => {
-            addNotification(data.msg);
-        });
-
-        socket.on('user_list_update', (data) => {
-            updateUserList(data.users);
-        });
-
-        socket.on('connect', () => {
-            console.log('Connected to server', socket.id);
-            // If we have a username already (e.g., page refresh), try setting it again
-            if (myUsername) {
-                 socket.emit('set_name', myUsername);
-            }
-            // Otherwise, the 'request_name' event will handle it
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.log('Disconnected from server:', reason);
-            addNotification(`Disconnected: ${reason}. Attempting to reconnect...`);
-            myUsername = ''; // Reset state on full disconnect
-            mySid = '';
-            displayName.textContent = 'Guest';
-            userList.innerHTML = '';
-            userCount.textContent = '0';
-            // Show name modal again on hard disconnect/reconnect cycle
-            if (reason !== 'io server disconnect') { // Avoid modal if server intentionally kicked
-                 nameModal.classList.remove('hidden');
-                 nameModal.classList.add('flex');
-            }
-        });
-
-        socket.on('connect_error', (err) => {
-            console.error('Connection error:', err);
-            addNotification(`Connection Failed: ${err.message}`);
-        });
-
-        // Initial focus on name input
-        nameInput.focus();
-
+        }
     </script>
+
 </body>
 </html>

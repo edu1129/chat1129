@@ -4,21 +4,13 @@
     {
       "src": "app.py",
       "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "25mb",
-        "runtime": "python3.9"
-      }
+      "config": { "maxLambdaSize": "50mb", "runtime": "python3.9" }
     }
   ],
   "routes": [
     {
-      "src": "/socket.io/",
-      "dest": "app.py",
-      "methods": ["GET", "POST"],
-      "headers": {
-        "Connection": "Upgrade",
-        "Upgrade": "websocket"
-      }
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
     },
     {
       "src": "/(.*)",
