@@ -1,16 +1,28 @@
 {
- "version": 2,
- "builds": [
-  {
-   "src": "app.js",
-   "use": "@vercel/node",
-   "config": { "includeFiles": ["dist/**"] }
-  }
- ],
- "routes": [
-  {
-   "src": "/(.*)",
-   "dest": "app.js"
-  }
- ]
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "20mb", // Increased slightly, adjust if needed
+        "runtime": "python3.9" // Or your preferred supported Python version
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/socket.io/",        // Route Socket.IO traffic
+      "dest": "app.py",
+      "methods": ["GET", "POST"], // Ensure both methods are allowed for Socket.IO handshake
+       "headers": {                // Required for WebSocket connections
+            "Connection": "Upgrade",
+            "Upgrade": "websocket"
+        }
+    },
+    {
+      "src": "/(.*)",             // Route all other HTTP traffic
+      "dest": "app.py"
+    }
+  ]
 }
