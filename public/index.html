@@ -93,11 +93,11 @@
             font-size: 0.85em;
             margin-bottom: 4px;
             color: var(--primary-color);
-            display: block; /* Ensure it takes its own line */
+            display: block;
         }
 
         .message.mine .sender {
-             color: #075e54; /* Slightly different color for own messages */
+             color: #075e54;
         }
 
 
@@ -175,12 +175,11 @@
             font-size: 0.8em;
             color: #666;
             background-color: #e9ecef;
-            height: 20px; /* Fixed height to prevent layout shifts */
+            height: 20px;
             line-height: 20px;
              border-top: 1px solid var(--border-color);
         }
 
-        /* Scrollbar styling (optional) */
         #messages::-webkit-scrollbar {
             width: 6px;
         }
@@ -220,7 +219,7 @@
 
         function getWebSocketURL() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host; // Includes hostname and port if specified
+            const host = window.location.host;
             return `${protocol}//${host}`;
         }
 
@@ -230,8 +229,6 @@
                 username = `Anonymous_${Math.floor(Math.random() * 1000)}`;
             }
             username = username.trim();
-             // Update header or add username display somewhere if desired
-             // document.getElementById('header').textContent = `Real-Time Chat - ${username}`;
         }
 
         function connectWebSocket() {
@@ -246,7 +243,6 @@
                 statusDiv.textContent = 'Connected';
                 sendButton.disabled = false;
                 addNotification(`You joined as ${username}`);
-                 // Server already sends welcome and join notifications
             };
 
             ws.onmessage = (event) => {
@@ -265,8 +261,7 @@
                 statusDiv.textContent = 'Disconnected. Attempting to reconnect...';
                  sendButton.disabled = true;
                  addNotification('Connection lost. Reconnecting...');
-                // Attempt to reconnect after a delay
-                setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
+                setTimeout(connectWebSocket, 5000);
             };
 
             ws.onerror = (error) => {
@@ -274,7 +269,6 @@
                 statusDiv.textContent = 'Connection Error';
                  sendButton.disabled = true;
                 addError('WebSocket connection error. Check console for details.');
-                // ws.close() will likely be called automatically after an error
             };
         }
 
@@ -311,33 +305,24 @@
                 const messageElement = document.createElement('div');
                 messageElement.classList.add('message');
 
-                // Determine if the message is from the current user or another user
                 const isMine = messageData.sender === username;
                 messageElement.classList.add(isMine ? 'mine' : 'other');
 
                 const senderSpan = document.createElement('span');
                 senderSpan.classList.add('sender');
-                // Show sender name only for messages from others unless it's the first message or different sender
                  if (!isMine) {
                     senderSpan.textContent = messageData.sender;
                      messageElement.appendChild(senderSpan);
-                } else {
-                     // Optionally add a subtle indicator like 'You'
-                     // senderSpan.textContent = 'You';
-                     // messageElement.appendChild(senderSpan);
                 }
-
 
                 const contentDiv = document.createElement('div');
                 contentDiv.textContent = messageData.payload;
                 messageElement.appendChild(contentDiv);
 
-
                  const timeSpan = document.createElement('span');
                 timeSpan.classList.add('timestamp');
                 timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 messageElement.appendChild(timeSpan);
-
 
                 messagesDiv.appendChild(messageElement);
                 scrollToBottom();
@@ -356,7 +341,6 @@
                 };
                 ws.send(JSON.stringify(messageObj));
 
-                // Display own message immediately
                 displayMessage(messageObj);
 
                 messageInput.value = '';
@@ -370,17 +354,14 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        // Event Listeners
         inputAreaForm.addEventListener('submit', (event) => {
-            event.preventDefault(); // Prevent page refresh
+            event.preventDefault();
             sendMessage();
         });
 
-        // Initial setup
         promptForUsername();
         connectWebSocket();
 
-         // Add focus back to input after modal/prompt (helps UX)
          messageInput.focus();
 
     </script>
