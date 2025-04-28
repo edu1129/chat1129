@@ -5,23 +5,23 @@
       "src": "app.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "20mb", // Increased slightly, adjust if needed
-        "runtime": "python3.9" // Or your preferred supported Python version
+        "maxLambdaSize": "25mb",
+        "runtime": "python3.9"
       }
     }
   ],
   "routes": [
     {
-      "src": "/socket.io/",        // Route Socket.IO traffic
+      "src": "/socket.io/",
       "dest": "app.py",
-      "methods": ["GET", "POST"], // Ensure both methods are allowed for Socket.IO handshake
-       "headers": {                // Required for WebSocket connections
-            "Connection": "Upgrade",
-            "Upgrade": "websocket"
-        }
+      "methods": ["GET", "POST"],
+      "headers": {
+        "Connection": "Upgrade",
+        "Upgrade": "websocket"
+      }
     },
     {
-      "src": "/(.*)",             // Route all other HTTP traffic
+      "src": "/(.*)",
       "dest": "app.py"
     }
   ]
