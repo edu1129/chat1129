@@ -1,183 +1,77 @@
 import os
-import datetime
-from collections import defaultdict, deque
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
-# --- Initialization ---
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default_dev_secret_key_123!@#')
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# Generate a secret key or use an environment variable
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'fallback_secret_key_replace_me!')
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
-# --- State Management (In-Memory) ---
-MAX_HISTORY_LEN = 50
-rooms_users = defaultdict(dict) # { room_name: { sid: username } }
-message_history = defaultdict(lambda: deque(maxlen=MAX_HISTORY_LEN)) # { room_name: deque([message_dict, ...]) }
-user_current_room = {} # { sid: current_room_name }
+users = {} # sid -> username
+user_rooms = {} # sid -> room (if implementing rooms later)
 
-# --- Helper Functions ---
-def get_timestamp():
-    return datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S UTC")
-
-def get_user_list_for_room(room_name):
-    return list(rooms_users.get(room_name, {}).values())
-
-def add_message_to_history(room_name, message_data):
-    message_history[room_name].append(message_data)
-
-def get_message_history_for_room(room_name):
-    return list(message_history.get(room_name, []))
-
-def cleanup_room_if_empty(room_name):
-    if room_name in rooms_users and not rooms_users[room_name]:
-        print(f"Cleaning up empty room: {room_name}")
-        del rooms_users[room_name]
-        if room_name in message_history:
-            del message_history[room_name]
-
-# --- HTTP Routes ---
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# --- SocketIO Event Handlers ---
 @socketio.on('connect')
 def handle_connect():
-    print(f"Client connected: {request.sid}")
+    print(f'Client connected: {request.sid}')
+    emit('request_name')
+
+@socketio.on('set_name')
+def handle_set_name(name):
+    clean_name = str(name).strip()
+    if clean_name and request.sid not in users:
+        users[request.sid] = clean_name
+        print(f'User {request.sid} set name to: {users[request.sid]}')
+        emit('name_accepted', {'name': clean_name, 'sid': request.sid})
+        emit('user_list_update', {'users': list(users.values())}, broadcast=True)
+        emit('notification', {'msg': f'{clean_name} has joined the chat.'}, broadcast=True, include_self=False)
+    elif clean_name and request.sid in users:
+        # Handle case where user might reconnect or try setting name again
+        emit('name_accepted', {'name': users[request.sid], 'sid': request.sid})
+        emit('user_list_update', {'users': list(users.values())}) # Send only to them
+    else:
+        emit('request_name') # Ask again if name is invalid
+
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    sid = request.sid
-    print(f"Client disconnected: {sid}")
-    current_room = user_current_room.pop(sid, None)
+    print(f'Client disconnected: {request.sid}')
+    if request.sid in users:
+        disconnected_user_name = users.pop(request.sid)
+        print(f'User {disconnected_user_name} left.')
+        emit('user_list_update', {'users': list(users.values())}, broadcast=True)
+        emit('notification', {'msg': f'{disconnected_user_name} has left the chat.'}, broadcast=True)
+    if request.sid in user_rooms:
+        # Handle room leaving if implemented
+        del user_rooms[request.sid]
 
-    if current_room and current_room in rooms_users and sid in rooms_users[current_room]:
-        username = rooms_users[current_room].pop(sid)
-        print(f"User {username} removed from room {current_room}")
-
-        leave_room(current_room)
-
-        emit('update_user_list', {
-            'room': current_room,
-            'users': get_user_list_for_room(current_room)
-            }, room=current_room)
-
-        status_msg = {
-            'msg': f"{username} has left the room.",
-            'timestamp': get_timestamp(),
-            'type': 'status',
-            'room': current_room # Add room context to status message
-        }
-        emit('receive_message', status_msg, room=current_room)
-        add_message_to_history(current_room, status_msg)
-        cleanup_room_if_empty(current_room)
-
-@socketio.on('join_room')
-def handle_join_room(data):
-    sid = request.sid
-    username = data.get('username', '').strip()
-    new_room = data.get('room', 'general').strip().lower() # Use lowercase room names
-
-    if not username or not new_room:
-        emit('error', {'msg': 'Username and room name cannot be empty.'}, room=sid)
-        return
-
-    if new_room in rooms_users and username.lower() in [name.lower() for name in rooms_users[new_room].values()]:
-         emit('error', {'msg': f'Username "{username}" is taken in room "{new_room}".'}, room=sid)
-         return
-
-    # --- Leave previous room logic ---
-    previous_room = user_current_room.get(sid)
-    if previous_room and previous_room != new_room:
-         if previous_room in rooms_users and sid in rooms_users[previous_room]:
-             prev_username = rooms_users[previous_room].pop(sid, username) # Use provided username as fallback
-             leave_room(previous_room)
-             print(f"User {prev_username} left room {previous_room}")
-
-             emit('update_user_list', {
-                'room': previous_room,
-                'users': get_user_list_for_room(previous_room)
-                }, room=previous_room)
-             status_msg_leave = {
-                'msg': f"{prev_username} has left the room.",
-                'timestamp': get_timestamp(),
-                'type': 'status',
-                'room': previous_room
-             }
-             emit('receive_message', status_msg_leave, room=previous_room)
-             add_message_to_history(previous_room, status_msg_leave)
-             cleanup_room_if_empty(previous_room)
-
-    # --- Join new room logic ---
-    if user_current_room.get(sid) != new_room: # Only join if not already in the room
-        join_room(new_room)
-
-    rooms_users[new_room][sid] = username
-    user_current_room[sid] = new_room
-    print(f"User {username} ({sid}) joined room: {new_room}")
-
-    emit('room_joined', {
-        'username': username,
-        'room': new_room,
-        'history': get_message_history_for_room(new_room)
-        }, room=sid)
-
-    emit('update_user_list', {
-        'room': new_room,
-        'users': get_user_list_for_room(new_room)
-        }, room=new_room)
-
-    status_msg_join = {
-        'msg': f"{username} has joined the room!",
-        'timestamp': get_timestamp(),
-        'type': 'status',
-        'room': new_room
-    }
-    emit('receive_message', status_msg_join, room=new_room, include_self=False)
-    add_message_to_history(new_room, status_msg_join)
 
 @socketio.on('send_message')
 def handle_send_message(data):
-    sid = request.sid
-    message_text = data.get('msg', '').strip()
-    current_room = user_current_room.get(sid)
-    username = rooms_users.get(current_room, {}).get(sid)
+    if request.sid in users and 'msg' in data:
+        message_text = str(data['msg']).strip()
+        if message_text:
+            username = users[request.sid]
+            print(f'Message from {username} ({request.sid}): {message_text}')
+            emit('new_message', {
+                'name': username,
+                'msg': message_text,
+                'sid': request.sid
+            }, broadcast=True)
+        else:
+             print(f"Empty message received from {users.get(request.sid, 'Unknown SID ' + request.sid)}")
+    elif request.sid not in users:
+         print(f"Message received from unknown user {request.sid}")
+         emit('request_name') # Ask for name if message sent before setting name
 
-    if not current_room or not username:
-        emit('error', {'msg': 'Error: Not connected to a room.'}, room=sid)
-        return
 
-    if not message_text:
-        return
-
-    message_data = {
-        'msg': message_text,
-        'username': username,
-        'timestamp': get_timestamp(),
-        'type': 'user',
-        'room': current_room
-    }
-
-    emit('receive_message', message_data, room=current_room)
-    add_message_to_history(current_room, message_data)
-
-@socketio.on('typing')
-def handle_typing(data):
-    sid = request.sid
-    is_typing = data.get('is_typing', False)
-    current_room = user_current_room.get(sid)
-    username = rooms_users.get(current_room, {}).get(sid)
-
-    if not current_room or not username:
-        return
-
-    emit('user_typing', {
-        'username': username,
-        'is_typing': is_typing,
-        'room': current_room
-    }, room=current_room, include_self=False)
-
-# --- Main Execution ---
 if __name__ == '__main__':
-    print("Starting Chat Server...")
-    socketio.run(app, debug=False, host='0.0.0.0', port=os.environ.get('PORT', 5000))
+    import eventlet
+    print("Starting server on http://127.0.0.1:5000")
+    # Use 0.0.0.0 to be accessible externally if needed, Vercel handles this
+    eventlet.wsgi.server(eventlet.listen(('', 5000)), app)
+    # For local dev without eventlet:
+    # socketio.run(app, debug=True, allow_unsafe_werkzeug=True, host='0.0.0.0', port=5000)

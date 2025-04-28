@@ -3,558 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Chat</title>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+    <title>Pro Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" integrity="sha512-Xm9qbB6Pu06k3PUwPj785dyhGMkLLWRGWF99xO3pvMAXCEKJJXKfp09FG1Nx/+GFhgbCSB7BjyTWvc4Y/GtpTQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
-        :root{--bg-color:#f0f2f5;--container-bg:#fff;--sidebar-bg:#e4e6eb;--input-bg:#f0f2f5;--hover-bg:#d8dadf;--text-color:#050505;--secondary-text:#65676b;--accent-color:#0084ff;--accent-text:#fff;--border-color:#ced0d4;--system-msg-color:#65676b;--error-msg-color:#fa383e;--my-message-bg:#0084ff;--my-message-text:#fff;--other-message-bg:#e4e6eb;--other-message-text:#050505;--typing-color:#65676b;--link-color:#0e71c4;--avatar-size:32px}*,*::before,*::after{box-sizing:border-box}body{margin:0;font-family:Segoe UI Historic,Segoe UI,Helvetica,Arial,sans-serif;background-color:var(--bg-color);color:var(--text-color);display:flex;height:100vh;overflow:hidden}#sidebar{width:250px;min-width:200px;background-color:var(--sidebar-bg);border-right:1px solid var(--border-color);display:flex;flex-direction:column;height:100%}#room-selection{padding:1rem;border-bottom:1px solid var(--border-color)}#room-selection label{font-weight:700;margin-bottom:.5rem;display:block}#room-input{width:calc(100% - 80px);padding:.5rem;border:1px solid var(--border-color);border-radius:4px;margin-right:5px}#join-room-button{padding:.5rem .8rem;background-color:var(--accent-color);color:var(--accent-text);border:none;border-radius:4px;cursor:pointer}#join-room-button:disabled{background-color:#a0c7e4;cursor:not-allowed}#user-list-container{flex-grow:1;display:flex;flex-direction:column;overflow:hidden}#user-list-container h2{margin:0;padding:.8rem 1rem;font-size:.9em;font-weight:600;color:var(--secondary-text);border-bottom:1px solid var(--border-color);text-align:center;text-transform:uppercase;letter-spacing:.5px}#users{list-style-type:none;margin:0;padding:.5rem 1rem;overflow-y:auto;flex-grow:1}#users li{padding:.4rem 0;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95em}.user-avatar{width:24px;height:24px;border-radius:50%;background-color:#ccc;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.8em;font-weight:700;margin-right:8px;flex-shrink:0}#chat-container{display:flex;flex-direction:column;flex-grow:1;background-color:var(--container-bg);height:100%}#chat-header{padding:.75rem 1rem;border-bottom:1px solid var(--border-color);font-weight:700;display:flex;justify-content:space-between;align-items:center}#chat-header span{flex-grow:1}#sound-toggle{font-size:.8em;cursor:pointer;padding:5px;border-radius:4px}#sound-toggle:hover{background-color:var(--hover-bg)}#sound-toggle.sound-on::before{content:'🔊';margin-right:4px}#sound-toggle.sound-off::before{content:'🔇';margin-right:4px}#messages{list-style-type:none;margin:0;padding:1rem;overflow-y:auto;flex-grow:1}#messages>li{margin-bottom:.25rem;position:relative}.message-container{display:flex;margin-bottom:.75rem;align-items:flex-start}.message-container.my-message{justify-content:flex-end}.message-container.other-message{justify-content:flex-start}.message-container.my-message .message-content{align-items:flex-end}.message-container.other-message .message-content{align-items:flex-start}.message-container .user-avatar{width:var(--avatar-size);height:var(--avatar-size);margin-top:5px}.message-container.my-message .user-avatar{margin-left:8px;order:2}.message-container.other-message .user-avatar{margin-right:8px;order:1}.message-content{display:flex;flex-direction:column;order:1}.message-container.my-message .message-content{order:1}.message-container.other-message .message-content{order:2}.message-bubble{padding:.5rem .8rem;border-radius:1rem;word-wrap:break-word;position:relative;min-width:50px}.message-container.my-message .message-bubble{background:var(--my-message-bg);color:var(--my-message-text);border-bottom-right-radius:.25rem}.message-container.other-message .message-bubble{background:var(--other-message-bg);color:var(--other-message-text);border-bottom-left-radius:.25rem}.message-meta{font-size:.8em;color:var(--secondary-text);margin-bottom:.25rem;padding:0 .2rem}.message-container.my-message .message-meta{text-align:right}.message-container.other-message .message-meta{text-align:left}.message-timestamp{margin-left:5px}#messages>li.message-status,#messages>li.message-system,#messages>li.message-error{color:var(--system-msg-color);font-style:italic;text-align:center;background:0 0;max-width:100%;font-size:.85em;margin:.5rem 0}#messages>li.message-error{color:var(--error-msg-color);font-weight:700;font-style:normal}#typing-indicator{padding:.25rem 1rem;height:1.5em;font-style:italic;color:var(--typing-color);font-size:.9em;text-align:left}#input-area{display:flex;align-items:center;padding:.75rem;border-top:1px solid var(--border-color);background-color:var(--container-bg)}#emoji-button{background:0 0;border:none;font-size:1.5rem;cursor:pointer;padding:0 .5rem;margin-right:.5rem;color:var(--secondary-text)}#emoji-button:hover{color:var(--text-color)}#emoji-button:disabled{cursor:not-allowed;color:#ccc}#input{border:1px solid var(--border-color);background-color:var(--input-bg);padding:.75rem 1rem;flex-grow:1;border-radius:1.5rem;margin-right:.5rem;resize:none;line-height:1.4}#input:focus{outline:0;border-color:var(--accent-color);background-color:var(--container-bg)}#input:disabled{background-color:#f8f9fa;cursor:not-allowed}#input-area button[type=submit]{background:var(--accent-color);border:none;padding:.75rem 1.5rem;border-radius:1.5rem;outline:0;color:var(--accent-text);cursor:pointer;font-weight:700;transition:background-color .2s ease}#input-area button[type=submit]:hover{background:#0073e6}#input-area button[type=submit]:disabled{background-color:#a0c7e4;cursor:not-allowed}#username-modal{position:fixed;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,.6);display:flex;justify-content:center;align-items:center;z-index:1000}#username-prompt{background:#fff;padding:2rem;border-radius:8px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,.2);min-width:300px}#username-prompt h2{margin-top:0;margin-bottom:1rem}#username-input{padding:.6rem;margin:.5rem 0;width:90%;border:1px solid #ccc;border-radius:4px}#username-button{padding:.7rem 1.5rem;cursor:pointer;background-color:var(--accent-color);color:var(--accent-text);border:none;border-radius:4px;font-weight:700}#username-error{color:var(--error-msg-color);font-size:.9em;height:1.2em;margin-top:.5em}emoji-picker{position:absolute;bottom:60px;left:10px;z-index:1001}
+        #chat-container { height: calc(100vh - 100px); }
+        #messages-box { scroll-behavior: smooth; }
+        .message-bubble { max-width: 75%; }
+        .my-message .message-bubble { background-color: #DCF8C6; } /* WhatsApp green */
+        .other-message .message-bubble { background-color: #FFFFFF; }
+        /* Hide scrollbar but allow scrolling */
+        #messages-box::-webkit-scrollbar { display: none; }
+        #messages-box { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body>
-    <div id="username-modal">
-        <div id="username-prompt">
-            <h2>Enter Your Username</h2>
-            <input type="text" id="username-input" placeholder="Username" autofocus maxlength="20">
-            <button id="username-button">Enter Chat</button>
-            <div id="username-error"></div>
+<body class="bg-gray-100 flex flex-col h-screen">
+
+    <div id="name-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl">
+            <h2 class="text-xl font-semibold mb-4">Enter Your Name</h2>
+            <input type="text" id="name-input" class="border border-gray-300 p-2 w-full rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Your Name">
+            <button id="submit-name" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded w-full">Join Chat</button>
         </div>
     </div>
 
-    <div id="sidebar">
-        <div id="room-selection">
-            <label for="room-input">Room:</label>
-            <input type="text" id="room-input" value="general" placeholder="Enter room name" disabled>
-            <button id="join-room-button" disabled>Join</button>
-        </div>
-        <div id="user-list-container">
-            <h2 id="user-list-header">Online Users</h2>
-            <ul id="users"></ul>
-        </div>
+    <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
+        <h1 class="text-2xl font-bold">Real-Time Chat</h1>
+        <div class="text-sm">Welcome, <span id="display-name" class="font-semibold">Guest</span>!</div>
+    </header>
+
+    <div class="flex flex-grow overflow-hidden">
+        <!-- User List Sidebar -->
+        <aside class="w-48 md:w-64 bg-gray-200 p-4 overflow-y-auto border-r border-gray-300">
+            <h2 class="text-lg font-semibold mb-3 border-b pb-2">Online Users (<span id="user-count">0</span>)</h2>
+            <ul id="user-list" class="space-y-1">
+                <!-- User list items will be added here -->
+            </ul>
+        </aside>
+
+        <!-- Chat Area -->
+        <main class="flex-grow flex flex-col bg-gray-50">
+            <div id="chat-container" class="flex-grow p-4 overflow-y-auto" >
+                <div id="messages-box" class="space-y-4">
+                    <!-- Messages will appear here -->
+                     <div class="text-center text-gray-500 text-sm my-4">
+                        Welcome to the chat! Messages will appear here.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Input Form -->
+            <footer class="bg-gray-100 p-4 border-t border-gray-300">
+                <form id="message-form" class="flex items-center space-x-3">
+                    <input id="message-input" type="text" placeholder="Type your message..." autocomplete="off" required
+                           class="flex-grow border border-gray-300 rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                        </svg>
+                    </button>
+                </form>
+            </footer>
+        </main>
     </div>
 
-    <div id="chat-container">
-         <div id="chat-header">
-            <span id="current-room-name">Not in a room</span>
-            <span id="sound-toggle" class="sound-off" title="Toggle sound notifications">Muted</span>
-         </div>
-        <ul id="messages"></ul>
-        <div id="typing-indicator"></div>
-         <emoji-picker style="display: none;"></emoji-picker>
-        <form id="input-area" action="">
-            <button type="button" id="emoji-button" title="Pick emoji" disabled>😀</button>
-            <input id="input" autocomplete="off" placeholder="Type a message..." disabled />
-            <button type="submit" id="send-button" disabled>Send</button>
-        </form>
-    </div>
-
-    <audio id="notification-sound" src="https://cdn.freesound.org/previews/253/253886_313295-lq.mp3" preload="auto"></audio>
-
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        // --- Configuration & Constants ---
-        const TYPING_TIMER_LENGTH = 800; // ms
-        const TYPING_DISPLAY_TIMER_LENGTH = 2500; // ms how long typing indicator shows
-        const HASH_COLOR_COUNT = 18; // Number of distinct background colors for avatars
-        const AVATAR_COLORS = [ // Predefined colors for avatars
-            "#ff7f0e", "#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
-            "#e377c2", "#7f7f7f", "#bcbd22", "#17becf", "#aec7e8", "#ffbb78",
-            "#98df8a", "#ff9896", "#c5b0d5", "#c49c94", "#f7b6d2", "#c7c7c7"
-        ];
+        const socket = io({ autoConnect: false }); // Connect manually after getting name
+        const messagesBox = document.getElementById('messages-box');
+        const messageForm = document.getElementById('message-form');
+        const messageInput = document.getElementById('message-input');
+        const userList = document.getElementById('user-list');
+        const userCount = document.getElementById('user-count');
+        const nameModal = document.getElementById('name-modal');
+        const nameInput = document.getElementById('name-input');
+        const submitNameButton = document.getElementById('submit-name');
+        const displayName = document.getElementById('display-name');
 
-        // --- DOM Elements ---
-        const messagesContainer = document.getElementById('messages');
-        const messageInputForm = document.getElementById('input-area');
-        const messageInput = document.getElementById('input');
-        const sendButton = document.getElementById('send-button');
-        const userList = document.getElementById('users');
-        const userListHeader = document.getElementById('user-list-header');
-        const typingIndicator = document.getElementById('typing-indicator');
-        const usernameModal = document.getElementById('username-modal');
-        const usernameInput = document.getElementById('username-input');
-        const usernameButton = document.getElementById('username-button');
-        const usernameError = document.getElementById('username-error');
-        const roomInput = document.getElementById('room-input');
-        const joinRoomButton = document.getElementById('join-room-button');
-        const currentRoomNameSpan = document.getElementById('current-room-name');
-        const emojiButton = document.getElementById('emoji-button');
-        const emojiPicker = document.querySelector('emoji-picker');
-        const soundToggle = document.getElementById('sound-toggle');
-        const notificationSound = document.getElementById('notification-sound');
+        let myUsername = '';
+        let mySid = '';
 
+        const scrollToBottom = () => {
+            messagesBox.scrollTop = messagesBox.scrollHeight;
+        };
 
-        // --- State Variables ---
-        let currentUsername = null;
-        let currentRoom = null;
-        let isTyping = false;
-        let lastTypingTime;
-        let usersTyping = {}; // { username: { username: string, timeoutId: number } }
-        let soundEnabled = false; // Sound off by default
-        let isWindowFocused = true;
+        const addNotification = (msg) => {
+            const item = document.createElement('div');
+            item.className = 'text-center text-gray-500 text-sm my-2 italic';
+            item.textContent = msg;
+            messagesBox.appendChild(item);
+            scrollToBottom();
+        };
 
+        const addMessage = (data) => {
+            const isMine = data.sid === mySid;
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${isMine ? 'justify-end my-message' : 'justify-start other-message'}`;
 
-        // --- Socket.IO Connection ---
-        const socket = io({
-             reconnectionAttempts: 5,
-             reconnectionDelay: 2000, // Increased delay
-             timeout: 10000, // Connection timeout
-        });
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble rounded-lg px-4 py-2 shadow';
 
-        // --- Utility Functions ---
+            const nameSpan = document.createElement('div');
+            nameSpan.className = `text-xs font-semibold mb-1 ${isMine ? 'text-right text-green-700' : 'text-blue-700'}`;
+            nameSpan.textContent = isMine ? 'You' : data.name;
 
-        function getUserInitials(username) {
-            if (!username) return '?';
-            const parts = username.split(/[ _-]/); // Split by space, underscore, hyphen
-            // Ensure parts[1] exists before accessing parts[1][0]
-            return parts.length === 1 ? username.substring(0, 2).toUpperCase() : (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
-        }
+            const msgP = document.createElement('p');
+            msgP.className = 'text-sm';
+            msgP.textContent = data.msg;
 
-        function getAvatarColor(username) {
-             // Simple hash function to get a somewhat consistent color based on username
-             let hash = 0;
-             if (!username) return AVATAR_COLORS[0]; // Default color
-             for (let i = 0; i < username.length; i++) {
-                hash = username.charCodeAt(i) + ((hash << 5) - hash);
-                hash = hash & hash; // Convert to 32bit integer
-             }
-             // Use the predefined color array
-             return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-        }
+            bubble.appendChild(nameSpan);
+            bubble.appendChild(msgP);
+            messageDiv.appendChild(bubble);
+            messagesBox.appendChild(messageDiv);
+            scrollToBottom();
+        };
 
-        function createUserAvatar(username) {
-            const avatar = document.createElement('div');
-            avatar.className = `user-avatar`;
-            avatar.style.backgroundColor = getAvatarColor(username); // Set color directly
-            avatar.textContent = getUserInitials(username);
-            avatar.title = username; // Tooltip with full name
-            return avatar;
-        }
-
-        function escapeHTML(str) {
-             if (typeof str !== 'string') return '';
-            const div = document.createElement('div');
-            div.appendChild(document.createTextNode(str));
-            return div.innerHTML;
-        }
-
-         function formatMessageContent(text) {
-            // Basic URL detection and linking
-            const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
-            return text.replace(urlRegex, function(url) {
-                // Ensure the captured URL is properly escaped in the href attribute if needed, though browsers are generally robust
-                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--link-color);">${escapeHTML(url)}</a>`;
-            });
-         }
-
-        function scrollToBottom() {
-            // Give the browser a moment to render before scrolling
-            setTimeout(() => {
-                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }, 50);
-        }
-
-        function playNotificationSound() {
-             // Check if context is available (might need user interaction first)
-             if (notificationSound.readyState >= 2) { // HAVE_CURRENT_DATA or more
-                 notificationSound.currentTime = 0; // Rewind first
-                 notificationSound.play().catch(error => console.warn("Sound play failed:", error)); // Play might be blocked by browser
-             } else {
-                 console.warn("Notification sound not ready to play.");
-             }
-        }
-
-        function updateSoundToggleUI() {
-             soundToggle.className = soundEnabled ? 'sound-on' : 'sound-off';
-             soundToggle.textContent = soundEnabled ? 'Sound ON' : 'Sound OFF';
-             soundToggle.title = soundEnabled ? 'Click to Mute Notifications' : 'Click to Unmute Notifications';
-        }
-
-        function enableChatInterface() {
-            messageInput.disabled = false;
-            sendButton.disabled = false;
-            emojiButton.disabled = false;
-            // Only enable room joining if username is set but room is not
-            if (currentUsername && !currentRoom) {
-                roomInput.disabled = false;
-                joinRoomButton.disabled = false;
-                roomInput.focus();
-            } else if (currentUsername && currentRoom) { // Enable message input only after joining a room
-                 messageInput.focus();
-            }
-        }
-
-        function disableChatInterface() {
-            messageInput.disabled = true;
-            sendButton.disabled = true;
-            emojiButton.disabled = true;
-            roomInput.disabled = true;
-            joinRoomButton.disabled = true;
-             emojiPicker.style.display = 'none'; // Hide picker if disabled
-        }
-
-
-        // --- Core Logic Functions ---
-
-        function addMessage(data, isHistory = false) {
-            const { msg, username, timestamp, type = 'user', room } = data;
-
-            // Critical check: Only add message if it belongs to the currently active room
-            if (room && room !== currentRoom) {
-                console.log(`Ignoring message for room ${room}, current room is ${currentRoom}`);
-                return;
-            }
-
-            const messageElement = document.createElement('li');
-            messageElement.classList.add(`message-${type}`); // user, system, status, error
-
-            if (type === 'user') {
-                 const messageContainer = document.createElement('div');
-                 messageContainer.classList.add('message-container');
-
-                 const isMyMsg = username === currentUsername;
-                 messageContainer.classList.add(isMyMsg ? 'my-message' : 'other-message');
-
-                 const avatarElement = createUserAvatar(username);
-
-                 const messageContent = document.createElement('div');
-                 messageContent.classList.add('message-content');
-
-                 // Add username and timestamp meta line
-                 const metaSpan = document.createElement('span');
-                 metaSpan.classList.add('message-meta');
-                 // Display only username for other messages for cleaner look? Optional.
-                 // metaSpan.textContent = `${isMyMsg ? username : username} - ${timestamp || ''}`;
-                 metaSpan.textContent = `${username} - ${timestamp || ''}`;
-
-                 const bubbleSpan = document.createElement('span');
-                 bubbleSpan.classList.add('message-bubble');
-                 bubbleSpan.innerHTML = formatMessageContent(escapeHTML(msg)); // Use innerHTML for potential links
-
-                 messageContent.appendChild(metaSpan); // Meta first
-                 messageContent.appendChild(bubbleSpan); // Then bubble
-
-                 messageContainer.appendChild(avatarElement); // Avatar added (CSS handles order)
-                 messageContainer.appendChild(messageContent); // Content added (CSS handles order)
-
-                 messageElement.appendChild(messageContainer);
-
-                 // Play sound only for new, non-history messages from others when enabled and window blurred
-                 if (!isHistory && !isMyMsg && soundEnabled && !isWindowFocused) {
-                     playNotificationSound();
-                 }
-
-            } else { // System, Status, Error messages
-                 messageElement.innerHTML = `<span class="message-text">${escapeHTML(msg)}</span> <span class="message-timestamp">${timestamp || ''}</span>`;
-            }
-
-            messagesContainer.appendChild(messageElement);
-
-            // Scroll only if near the bottom or it's a message from the current user or system message
-            const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 100; // Tolerance
-            if (isHistory || (username === currentUsername) || isScrolledToBottom || type !== 'user') {
-                scrollToBottom();
-            }
-        }
-
-        function loadMessageHistory(history) {
-             messagesContainer.innerHTML = ''; // Clear existing messages
-             if (history && history.length > 0) {
-                addMessage({ type: 'system', room: currentRoom, msg: `--- Displaying last ${history.length} messages ---`, timestamp: '' }, true);
-                history.forEach(msgData => addMessage(msgData, true)); // Mark as history message
-             } else {
-                 addMessage({ type: 'system', room: currentRoom, msg: 'No previous messages in this room.', timestamp: '' }, true);
-             }
-             // Ensure scroll happens after history is potentially loaded
-             setTimeout(scrollToBottom, 100);
-        }
-
-        function updateUserList(usernames) {
-            userList.innerHTML = ''; // Clear current list
-            usernames.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())); // Sort
-            usernames.forEach(username => {
+        const updateUserList = (users) => {
+            userList.innerHTML = '';
+            userCount.textContent = users.length;
+            users.sort();
+            users.forEach(user => {
                 const item = document.createElement('li');
-                const avatar = createUserAvatar(username);
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = escapeHTML(username);
-                item.appendChild(avatar);
-                item.appendChild(nameSpan);
+                item.className = 'text-gray-700 text-sm flex items-center space-x-2';
+                const statusDot = document.createElement('span');
+                statusDot.className = 'h-2 w-2 bg-green-500 rounded-full inline-block';
+                item.appendChild(statusDot);
+                const nameText = document.createElement('span');
+                nameText.textContent = user;
+                if (user === myUsername) {
+                    nameText.classList.add('font-semibold');
+                    nameText.textContent += ' (You)';
+                }
+                item.appendChild(nameText);
+
                 userList.appendChild(item);
             });
-            userListHeader.textContent = `Online Users (${usernames.length})`;
-        }
+        };
 
-        function updateTypingIndicator() {
-            const typingUsernames = Object.values(usersTyping).map(u => u.username); // Get names from stored objects
-            if (typingUsernames.length === 0) {
-                typingIndicator.textContent = '';
-            } else if (typingUsernames.length === 1) {
-                typingIndicator.textContent = `${escapeHTML(typingUsernames[0])} is typing...`;
-            } else if (typingUsernames.length === 2) {
-                 typingIndicator.textContent = `${escapeHTML(typingUsernames[0])} and ${escapeHTML(typingUsernames[1])} are typing...`;
+        const handleNameSubmit = () => {
+             const name = nameInput.value.trim();
+            if (name) {
+                socket.connect(); // Now connect to the server
+                socket.emit('set_name', name);
             } else {
-                typingIndicator.textContent = 'Several people are typing...';
+                alert('Please enter a valid name.');
             }
-        }
+        };
 
-        // --- Event Listeners ---
-
-        usernameButton.addEventListener('click', () => {
-            const username = usernameInput.value.trim();
-            if (username) {
-                // Don't set currentUsername here yet, wait for server confirmation via join_room
-                usernameError.textContent = '';
-                usernameModal.style.display = 'none'; // Hide modal immediately
-                enableChatInterface(); // Enable room joining parts
-                // Attempt to join the default/entered room
-                const roomToJoin = roomInput.value.trim().toLowerCase() || 'general';
-                joinRoom(username, roomToJoin); // Pass username to join function
-            } else {
-                usernameError.textContent = 'Please enter a valid username.';
-            }
-        });
-
-        usernameInput.addEventListener('keypress', (e) => {
+        submitNameButton.addEventListener('click', handleNameSubmit);
+        nameInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                usernameButton.click(); // Trigger button click on Enter
+                handleNameSubmit();
             }
         });
 
-        joinRoomButton.addEventListener('click', () => {
-            const roomName = roomInput.value.trim().toLowerCase();
-            if (roomName && currentUsername) { // Check if username is set *from server confirmation*
-                 joinRoom(currentUsername, roomName);
-            } else if (!currentUsername) {
-                 // This case might happen if user tries joining before initial join confirmation
-                 alert("Please wait for username confirmation or refresh.");
-                 usernameModal.style.display = 'flex'; // Show modal again
-                 disableChatInterface();
-            } else {
-                 alert("Please enter a room name.");
-            }
-        });
-
-         roomInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                joinRoomButton.click();
-            }
-        });
-
-        messageInputForm.addEventListener('submit', (e) => {
+        messageForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const messageText = messageInput.value.trim();
-            if (messageText && currentUsername && currentRoom) {
-                socket.emit('send_message', { msg: messageText });
-                messageInput.value = ''; // Clear input field
-                // Stop broadcasting typing after sending
-                if(isTyping) {
-                     socket.emit('typing', { is_typing: false });
-                     isTyping = false;
-                }
-                 messageInput.focus(); // Keep focus on input
+            const msg = messageInput.value.trim();
+            if (msg && myUsername) {
+                socket.emit('send_message', { msg: msg });
+                messageInput.value = '';
+                messageInput.focus();
             }
         });
 
-        messageInput.addEventListener('input', () => {
-            if (!currentUsername || !currentRoom) return;
-
-            if (!isTyping) {
-                isTyping = true;
-                socket.emit('typing', { is_typing: true });
-            }
-            lastTypingTime = Date.now();
-
-            // Use a single timeout that checks if typing stopped
-            setTimeout(() => {
-                if (isTyping && (Date.now() - lastTypingTime >= TYPING_TIMER_LENGTH)) {
-                    socket.emit('typing', { is_typing: false });
-                    isTyping = false;
-                }
-            }, TYPING_TIMER_LENGTH);
+        socket.on('request_name', () => {
+            // This ensures the modal is shown if somehow bypassed or on reconnect without name
+            nameModal.classList.remove('hidden');
+            nameModal.classList.add('flex');
+            nameInput.focus();
         });
 
-        emojiButton.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent closing if clicked again immediately
-            emojiPicker.style.display = (emojiPicker.style.display === 'none' ? 'block' : 'none');
-        });
-
-        emojiPicker.addEventListener('emoji-click', event => {
-            messageInput.value += event.detail.unicode;
-            emojiPicker.style.display = 'none';
+        socket.on('name_accepted', (data) => {
+            myUsername = data.name;
+            mySid = data.sid;
+            displayName.textContent = myUsername;
+            nameModal.classList.add('hidden');
+            nameModal.classList.remove('flex');
             messageInput.focus();
+            // Clear initial welcome message if present
+             const initialMsg = messagesBox.querySelector('.text-gray-500');
+             if (initialMsg && initialMsg.textContent.includes('Welcome')) {
+                 messagesBox.innerHTML = ''; // Clear placeholder
+             }
+             addNotification(`You joined as ${myUsername}`);
         });
 
-         // Close emoji picker if clicking outside
-         document.addEventListener('click', (event) => {
-             if (emojiPicker.style.display !== 'none' && !emojiPicker.contains(event.target) && event.target !== emojiButton) {
-                 emojiPicker.style.display = 'none';
-             }
-         });
+        socket.on('new_message', (data) => {
+            addMessage(data);
+        });
 
-         soundToggle.addEventListener('click', () => {
-             soundEnabled = !soundEnabled;
-             updateSoundToggleUI();
-              // Try to play a short sound on enable to test/prompt for permission
-             if (soundEnabled) {
-                 playNotificationSound();
-             }
-         });
+        socket.on('notification', (data) => {
+            addNotification(data.msg);
+        });
 
-         window.addEventListener('focus', () => { isWindowFocused = true; });
-         window.addEventListener('blur', () => { isWindowFocused = false; });
-
-
-        // --- Socket.IO Handlers ---
-
-        function joinRoom(usernameToJoin, roomNameToJoin) {
-             if (!usernameToJoin || !roomNameToJoin) return;
-             console.log(`Attempting to join room: ${roomNameToJoin} as ${usernameToJoin}`);
-             // Clear previous room state visually BEFORE sending join request
-             messagesContainer.innerHTML = '';
-             userList.innerHTML = '';
-             userListHeader.textContent = 'Online Users';
-             typingIndicator.textContent = '';
-             // currentRoom = null; // Don't nullify currentRoom yet, wait for confirmation/error
-             currentRoomNameSpan.textContent = `Joining ${roomNameToJoin}...`;
-             disableChatInterface(); // Disable input while joining
-
-             // Send join request
-             socket.emit('join_room', { username: usernameToJoin, room: roomNameToJoin });
-        }
+        socket.on('user_list_update', (data) => {
+            updateUserList(data.users);
+        });
 
         socket.on('connect', () => {
-            console.log('Socket Connected:', socket.id);
-            // If we already have a confirmed username (e.g., after reconnect), try rejoining
-            if (currentUsername && currentRoom) {
-                console.log(`Reconnected. Attempting to rejoin room: ${currentRoom} as ${currentUsername}`);
-                joinRoom(currentUsername, currentRoom);
-            } else {
-                // On initial connect, show username modal
-                usernameModal.style.display = 'flex';
-                disableChatInterface();
-                usernameInput.focus();
+            console.log('Connected to server', socket.id);
+            // If we have a username already (e.g., page refresh), try setting it again
+            if (myUsername) {
+                 socket.emit('set_name', myUsername);
             }
+            // Otherwise, the 'request_name' event will handle it
         });
 
         socket.on('disconnect', (reason) => {
-            console.log('Socket Disconnected:', reason);
-            addMessage({ type: 'error', room: currentRoom, msg: `Disconnected: ${reason}. Attempting to reconnect...`, timestamp: ''});
-            // Clear UI related to the room
-            userList.innerHTML = '<li><i>Disconnected</i></li>';
-            userListHeader.textContent = 'Offline';
-            typingIndicator.textContent = '';
-            usersTyping = {};
-            currentRoomNameSpan.textContent = "Disconnected";
-            // currentRoom = null; // Keep currentRoom potentially for rejoin attempt
-            disableChatInterface(); // Disable everything until reconnected
+            console.log('Disconnected from server:', reason);
+            addNotification(`Disconnected: ${reason}. Attempting to reconnect...`);
+            myUsername = ''; // Reset state on full disconnect
+            mySid = '';
+            displayName.textContent = 'Guest';
+            userList.innerHTML = '';
+            userCount.textContent = '0';
+            // Show name modal again on hard disconnect/reconnect cycle
+            if (reason !== 'io server disconnect') { // Avoid modal if server intentionally kicked
+                 nameModal.classList.remove('hidden');
+                 nameModal.classList.add('flex');
+            }
         });
 
         socket.on('connect_error', (err) => {
-          console.error('Connection Error:', err);
-          addMessage({ type: 'error', room: currentRoom, msg: `Connection failed: ${err.message}. Check server and network.`, timestamp: '' });
-          // Show error in modal if it's visible
-          if (usernameModal.style.display === 'flex') {
-              usernameError.textContent = `Connection Failed: ${err.message}`;
-          }
-          disableChatInterface();
+            console.error('Connection error:', err);
+            addNotification(`Connection Failed: ${err.message}`);
         });
 
-        socket.on('room_joined', (data) => {
-            const { username, room, history } = data;
-            console.log(`Server confirmed join for room: ${room} as ${username}`);
-            // IMPORTANT: Set currentUsername and currentRoom only upon server confirmation
-            currentUsername = username;
-            currentRoom = room;
-
-            currentRoomNameSpan.textContent = `Room: ${room}`;
-            roomInput.value = room; // Update input field to current room
-            loadMessageHistory(history);
-            enableChatInterface(); // Fully enable chat now
-            messageInput.focus();
-            usernameModal.style.display = 'none'; // Ensure modal is hidden
-        });
-
-        socket.on('error', (data) => {
-            console.error('Server Error:', data.msg);
-            // Display error prominently in the chat area
-            addMessage({ type: 'error', room: currentRoom, msg: `Error: ${data.msg}`, timestamp: '' });
-
-            // If error occurred during join attempt (currentRoom not set yet)
-            if (!currentRoom) {
-                 currentRoomNameSpan.textContent = "Error Joining Room";
-                 // Re-enable room joining controls *if* username was likely set locally
-                 // This is tricky, might be better to just show username prompt again
-                 usernameModal.style.display = 'flex';
-                 disableChatInterface(); // Ensure everything is disabled except prompt
-                 usernameError.textContent = data.msg; // Show error in modal
-                 currentUsername = null; // Reset local username state
-            }
-            // If modal is somehow visible, show error there too
-            if (usernameModal.style.display === 'flex') {
-                 usernameError.textContent = data.msg;
-            }
-        });
-
-        socket.on('receive_message', (data) => {
-            // Add safety check: only process message if it's for the current room
-            if (data.room === currentRoom) {
-                console.log('Message received for current room:', data);
-                addMessage(data);
-                 // Clear typing indicator for the sender if they were typing
-                 // Check if usersTyping[data.username] exists before accessing timeoutId
-                if (data.username && usersTyping[data.username]) {
-                    clearTimeout(usersTyping[data.username].timeoutId);
-                    delete usersTyping[data.username];
-                    updateTypingIndicator();
-                }
-            } else {
-                 console.log("Received message for different room, ignoring:", data.room, "Current:", currentRoom);
-            }
-        });
-
-        socket.on('update_user_list', (data) => {
-            // Only update list if it's for the current room
-            if (data.room === currentRoom) {
-                updateUserList(data.users);
-            }
-        });
-
-        socket.on('user_typing', (data) => {
-            // Only show typing if it's for the current room and not self
-            if (data.room === currentRoom && data.username !== currentUsername) {
-                 const { username, is_typing } = data;
-                 if (is_typing) {
-                     // If a timeout already exists for this user, clear it first
-                     if (usersTyping[username]) {
-                         clearTimeout(usersTyping[username].timeoutId);
-                     }
-                     // Store username along with timeoutId
-                     usersTyping[username] = {
-                         username: username,
-                         timeoutId: setTimeout(() => {
-                            delete usersTyping[username];
-                            updateTypingIndicator();
-                         }, TYPING_DISPLAY_TIMER_LENGTH) // Remove after X seconds of inactivity
-                     };
-                 } else {
-                     // If server says user stopped typing, remove immediately
-                     if (usersTyping[username]) {
-                         clearTimeout(usersTyping[username].timeoutId);
-                         delete usersTyping[username];
-                     }
-                 }
-                 updateTypingIndicator();
-            }
-        });
-
-        // --- Initial Page Load ---
-        function initializeApp() {
-            disableChatInterface(); // Start disabled
-            updateSoundToggleUI();
-            // Show username modal on load
-            usernameModal.style.display = 'flex';
-            usernameInput.focus();
-        }
-
-        // Wait for the DOM to be fully loaded before initializing
-        document.addEventListener('DOMContentLoaded', initializeApp);
+        // Initial focus on name input
+        nameInput.focus();
 
     </script>
 </body>
